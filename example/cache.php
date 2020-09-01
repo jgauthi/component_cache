@@ -15,8 +15,8 @@ define('TMP_PATH', sys_get_temp_dir()); // You can set your tmp folder
 
 $data = new Cache($url, '5i', TMP_PATH); // 5min
 
-if ($data->existe()) {
-    $contenu = $data->contenu();
+if ($data->exists()) {
+    $content = $data->content();
 
 } else {
     $stripBody = function ($html) {
@@ -32,7 +32,7 @@ if ($data->existe()) {
     $page = preg_replace("#{$fin}(.+)$#i", '', $page);
     $page = preg_replace('#src="/#Di', 'src="http://fr.wikipedia.org/', $page);
     $page = $stripBody($page);
-    $contenu = $data->contenu($page);
+    $content = $data->content($page);
 }
 
 ?>
@@ -49,5 +49,5 @@ if ($data->existe()) {
     }
 </style>
 
-<h1>Téléchargement d'une page et mise en cache</h1>
-<div class="contenu"><?=$contenu?></div>
+<h1>Downloading a page and caching</h1>
+<div class="contenu"><?=$content?></div>

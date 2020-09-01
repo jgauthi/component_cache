@@ -13,23 +13,23 @@ use InvalidArgumentException;
 
 class Cache
 {
-    public $nom;
-    public $dir;
+    public $cacheName;
+    public $folder;
     public $date;
-    protected $fichier;
-    protected $contenu;
+    protected $cacheFile;
+    protected $content;
     protected $type;
-    protected $etat = null;
+    protected $cacheExists = null;
 
     /**
      * cache constructor.
      *
-     * @param string $nom
+     * @param string $cacheName
      * @param string $date
-     * @param string $dossier
+     * @param string $folder
      * @param string $type
      */
-    public function __construct($nom, $date, $dossier = 'tmp', $type = 'tpl')
+    public function __construct($cacheName, $date, $folder = 'tmp', $type = 'tpl')
     {
         // Type de cache
         if (preg_match('#^dat#i', $type)) {
@@ -43,16 +43,18 @@ class Cache
         }
 
         // Tentative de créer le dossier
-        if (!is_dir($dossier) && !mkdir($dossier, 0777)) {
-            throw new InvalidArgumentException("Impossible de créer le dossier '$dossier', la class ".__CLASS__.' ne peut pas fonctionner');
+        if (!is_dir($folder) && !mkdir($folder, 0777)) {
+            throw new InvalidArgumentException(
+                "Unable to create folder '{$folder}', class" . __CLASS__ . ' cannot work.'
+            );
         }
 
-        $this->dir = $dossier.'/';
+        $this->folder = $folder.'/';
 
         // Info du cache
-        $this->nom = md5($nom.$_SERVER['HTTP_HOST']);
-        $this->date = $this->_date($date);
-        $this->fichier = $this->dir.'cache_'.$this->nom.$this->_extension($this->type);
+        $this->cacheName = md5($cacheName.$_SERVER['HTTP_HOST']);
+        $this->date = $this->calculTime($date);
+        $this->cacheFile = $this->folder.'cache_'.$this->cacheName.$this->getExtension($this->type);
     }
 
     //-- FONCTIONS ----------------------------------------------------------
@@ -60,115 +62,108 @@ class Cache
     /**
      * @return bool|null
      */
-    public function existe()
+    public function exists()
     {
         // Si le cache existe
-        if (null === $this->etat) {
-            $this->etat = false;
+        if (null === $this->cacheExists) {
+            $this->cacheExists = false;
 
-            if (is_readable($this->fichier)) {
-                if (@filemtime($this->fichier) > (time() - $this->date)) {
-                    $this->etat = true;
+            if (is_readable($this->cacheFile)) {
+                if (@filemtime($this->cacheFile) > (time() - $this->date)) {
+                    $this->cacheExists = true;
                 } else {
-                    $this->detruire();
+                    $this->delete();
                 }
             }
         }
 
-        return $this->etat;
+        return $this->cacheExists;
     }
 
     /**
-     * Gestionnaire de contenu.
+     * Content manager
      *
-     * @param string $contenu
-     *
-     * @return array|false|mixed|string
+     * @param string|null $content
+     * @return mixed
      */
-    public function contenu($contenu = '')
+    public function content($content = null)
     {
-        if (('data' === $this->type || 'sql' === $this->type) && (!is_array($contenu) && !is_object($contenu))) {
-            $this->contenu = unserialize(file_get_contents($this->fichier));
-        } elseif ('template' === $this->type && $this->etat) {
-            $this->contenu = file_get_contents($this->fichier);
-        } elseif ('template' === $this->type && !empty($contenu)) {
-            $this->contenu = $contenu;
-        } elseif (!empty($contenu)) {
-            $this->contenu = $contenu;
+        if (('data' === $this->type || 'sql' === $this->type) && (!is_array($content) && !is_object($content))) {
+            $this->content = unserialize(file_get_contents($this->cacheFile));
+        } elseif ('template' === $this->type && $this->cacheExists) {
+            $this->content = file_get_contents($this->cacheFile);
+        } elseif ('template' === $this->type && !empty($content)) {
+            $this->content = $content;
+        } elseif (!empty($content)) {
+            $this->content = $content;
         }
 
-        // Envoyer le contenu si $contenu = TRUE
-        return $this->contenu;
+        return $this->content;
     }
 
     /**
-     * Création du cache en indiquant une valeur si contenu() n'a pas été utilisé.
-     *
-     * @param string $contenu
-     *
+     * @param string $content
      * @return bool
      */
-    public function creer($contenu = '')
+    public function create($content = '')
     {
-        if (empty($contenu)) {
-            if (empty($this->contenu)) {
-                throw new InvalidArgumentException('Impossible de créer le cache, pas de contenu');
+        if (empty($content)) {
+            if (empty($this->content)) {
+                throw new InvalidArgumentException('Could not create cache, no content');
             }
-            $contenu = $this->contenu;
+            $content = $this->content;
         }
 
         // Signature
         switch ($this->type) {
             case 'template':
-                $contenu .= "\n\n".'<!-- CACHE {'.$this->nom.'} time: '.date('d-m-Y, H:i:s').' -->'."\n\n";
+                $content .= "\n\n".'<!-- CACHE {'.$this->cacheName.'} time: '.date('d-m-Y, H:i:s').' -->'."\n\n";
                 break;
 
             case 'data': case 'sql':
-                $contenu = serialize($contenu);
+                $content = serialize($content);
                 break;
 
             default:
-                throw new InvalidArgumentException('Donné du Cache ['.$this->type.'] id: {'.$this->nom.'} corrompu');
+                throw new InvalidArgumentException('Donné du Cache ['.$this->type.'] id: {'.$this->cacheName.'} corrompu');
         }
 
-        // Création du cache
-        $fichier = @fopen($this->fichier, 'w');
-        fwrite($fichier, $contenu);
-        fclose($fichier);
+        // Cache creation
+        $file = @fopen($this->cacheFile, 'w');
+        fwrite($file, $content);
+        fclose($file);
 
-        return file_exists($this->fichier);
+        return file_exists($this->cacheFile);
     }
 
     /**
-     * Effacer un cache.
-     *
-     * @param null   $fichier
+     * @param string|null   $filename
      * @param string $type
      *
      * @return bool
      */
-    public function detruire($fichier = null, $type = 'tpl')
+    public function delete($filename = null, $type = 'tpl')
     {
-        if (null === $fichier) {
-            $fichier = $this->fichier;
+        if (is_null($filename)) {
+            $file = $this->cacheFile;
         } else {
-            $fichier = $this->dir.md5($fichier).$this->_extension($type);
+            $file = $this->folder.md5($filename).$this->getExtension($type);
         }
 
-        return @unlink($fichier);
+        return @unlink($file);
     }
 
     /**
-     * Clean cache (supprimer tous les caches crée par cette class).
+     * Clean cache (delete all caches created by this class).
      *
      * @param string|null $dossier
      *
      * @return bool|int
      */
-    public function effacer_cache($dossier = null)
+    public function clearCache($dossier = null)
     {
         if (null === $dossier) {
-            $dossier = $this->dir;
+            $dossier = $this->folder;
         }
 
         // Vérifier le dossier
@@ -180,7 +175,7 @@ class Cache
                     continue;
                 }
 
-                $ext = $this->_extension($this->type);
+                $ext = $this->getExtension($this->type);
 
                 // Effacer les fichiers caches
                 if (preg_match("#^cache_([a-f0-9]{32})\.".$ext.'$#i', $file) && @unlink($file)) {
@@ -195,14 +190,11 @@ class Cache
         return false;
     }
 
-    //-- Sous fonctions -------------------------------------------------------
-
     /**
      * @param string $date
-     *
-     * @return mixed
+     * @return int
      */
-    protected function _date($date)
+    protected function calculTime($date)
     {
         if (preg_match('#[ihjsmac]#i', $date)) {
             $date = str_replace(['i', 'h', 'j', 's', 'm', 'a', 'c'],
@@ -216,19 +208,17 @@ class Cache
 
     /**
      * @param string $type
-     *
      * @return string
      */
-    protected function _extension($type)
+    protected function getExtension($type)
     {
+        $ext = '.tmp';
         if (preg_match('#^dat#i', $type)) {
             $ext = '.dat';
         } elseif (preg_match('#(html|tpl)#i', $type)) {
             $ext = '.tpl';
         } elseif (preg_match('#(sql|db)#i', $type)) {
             $ext = '.sql';
-        } else {
-            $ext = '.tmp';
         }
 
         return $ext;
