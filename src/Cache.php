@@ -42,7 +42,6 @@ class Cache
             $this->type = 'file';
         }
 
-        // Tentative de créer le dossier
         if (!is_dir($folder) && !mkdir($folder, 0777)) {
             throw new InvalidArgumentException(
                 "Unable to create folder '{$folder}', class" . __CLASS__ . ' cannot work.'
@@ -51,13 +50,10 @@ class Cache
 
         $this->folder = $folder.'/';
 
-        // Info du cache
         $this->cacheName = md5($cacheName.$_SERVER['HTTP_HOST']);
         $this->date = $this->calculTime($date);
         $this->cacheFile = $this->folder.'cache_'.$this->cacheName.$this->getExtension($this->type);
     }
-
-    //-- FONCTIONS ----------------------------------------------------------
 
     /**
      * @return bool|null

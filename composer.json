@@ -1,10 +1,10 @@
 {
   "name": "jgauthi/component_cache",
-  "description": "Form error handler",
+  "description": "Data storage in the form of temporary files (cache)",
   "type": "library",
   "homepage": "https://github.com/jgauthi/component_cache",
   "require": {
-    "php": ">=4.0"
+    "php": ">=5.4"
   },
   "autoload": {
     "psr-4": { "Jgauthi\\Component\\Cache\\": "src/" }
