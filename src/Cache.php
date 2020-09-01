@@ -3,7 +3,7 @@
  * @name: Cache
  * @note: Data storage in the form of temporary files (cache)
  * @author: Jgauthi <github.com/jgauthi>, created at [14mars2009]
- * @version 1.1
+ * @version 2.0
 
  *******************************************************************************/
 
@@ -13,33 +13,30 @@ use InvalidArgumentException;
 
 class Cache
 {
-    public $cacheName;
-    public $folder;
-    public $date;
-    protected $cacheFile;
-    protected $content;
-    protected $type;
-    protected $cacheExists = null;
+    public const TYPE_DATA = 'data';
+    public const TYPE_TEMPLATE = 'template';
+    public const TYPE_SQL = 'sql';
+    public const TYPE_FILE = 'file';
 
-    /**
-     * cache constructor.
-     *
-     * @param string $cacheName
-     * @param string $date
-     * @param string $folder
-     * @param string $type
-     */
-    public function __construct($cacheName, $date, $folder = 'tmp', $type = 'tpl')
+    public string $cacheName;
+    public string $folder;
+    public string $date;
+    protected string $cacheFile;
+    protected string $type;
+    protected ?bool $cacheExists = null;
+    /** @var mixed $content */
+    protected $content;
+
+    public function __construct(string $cacheName, string $date, string $folder = 'tmp', string $type = self::TYPE_TEMPLATE)
     {
         // Type de cache
+        $this->type = self::TYPE_FILE;
         if (preg_match('#^dat#i', $type)) {
-            $this->type = 'data';
-        } elseif (preg_match('#(html|tpl)#i', $type)) {
-            $this->type = 'template';
+            $this->type = self::TYPE_DATA;
+        } elseif (preg_match('#(html|tpl|template)#i', $type)) {
+            $this->type = self::TYPE_TEMPLATE;
         } elseif (preg_match('#(sql|db)#i', $type)) {
-            $this->type = 'sql';
-        } else {
-            $this->type = 'file';
+            $this->type = self::TYPE_SQL;
         }
 
         if (!is_dir($folder) && !mkdir($folder, 0777)) {
@@ -55,12 +52,8 @@ class Cache
         $this->cacheFile = $this->folder.'cache_'.$this->cacheName.$this->getExtension($this->type);
     }
 
-    /**
-     * @return bool|null
-     */
-    public function exists()
+    public function exists(): ?bool
     {
-        // Si le cache existe
         if (null === $this->cacheExists) {
             $this->cacheExists = false;
 
@@ -77,18 +70,15 @@ class Cache
     }
 
     /**
-     * Content manager
-     *
-     * @param string|null $content
      * @return mixed
      */
-    public function content($content = null)
+    public function content(?string $content = null)
     {
-        if (('data' === $this->type || 'sql' === $this->type) && (!is_array($content) && !is_object($content))) {
+        if (in_array($this->type, [self::TYPE_DATA, self::TYPE_SQL]) && (!is_array($content) && !is_object($content))) {
             $this->content = unserialize(file_get_contents($this->cacheFile));
-        } elseif ('template' === $this->type && $this->cacheExists) {
+        } elseif (self::TYPE_TEMPLATE === $this->type && $this->cacheExists) {
             $this->content = file_get_contents($this->cacheFile);
-        } elseif ('template' === $this->type && !empty($content)) {
+        } elseif (self::TYPE_TEMPLATE === $this->type && !empty($content)) {
             $this->content = $content;
         } elseif (!empty($content)) {
             $this->content = $content;
@@ -97,11 +87,7 @@ class Cache
         return $this->content;
     }
 
-    /**
-     * @param string $content
-     * @return bool
-     */
-    public function create($content = '')
+    public function create(?string $content = null): bool
     {
         if (empty($content)) {
             if (empty($this->content)) {
@@ -112,16 +98,17 @@ class Cache
 
         // Signature
         switch ($this->type) {
-            case 'template':
+            case self::TYPE_TEMPLATE:
                 $content .= "\n\n".'<!-- CACHE {'.$this->cacheName.'} time: '.date('d-m-Y, H:i:s').' -->'."\n\n";
                 break;
 
-            case 'data': case 'sql':
+            case self::TYPE_DATA:
+            case self::TYPE_SQL:
                 $content = serialize($content);
                 break;
 
             default:
-                throw new InvalidArgumentException('Donné du Cache ['.$this->type.'] id: {'.$this->cacheName.'} corrompu');
+                throw new InvalidArgumentException('Cache Data ['.$this->type.'] id: {'.$this->cacheName.'} corrupt');
         }
 
         // Cache creation
@@ -132,13 +119,7 @@ class Cache
         return file_exists($this->cacheFile);
     }
 
-    /**
-     * @param string|null   $filename
-     * @param string $type
-     *
-     * @return bool
-     */
-    public function delete($filename = null, $type = 'tpl')
+    public function delete(?string $filename = null, string $type = 'tpl'): bool
     {
         if (is_null($filename)) {
             $file = $this->cacheFile;
@@ -149,48 +130,37 @@ class Cache
         return @unlink($file);
     }
 
-    /**
-     * Clean cache (delete all caches created by this class).
-     *
-     * @param string|null $dossier
-     *
-     * @return bool|int
-     */
-    public function clearCache($dossier = null)
+    public function clearCache(?string $folder = null): int
     {
-        if (null === $dossier) {
-            $dossier = $this->folder;
+        if (null === $folder) {
+            $folder = $this->folder;
         }
 
         // Vérifier le dossier
-        if (is_dir($dossier)) {
-            $dir = opendir($dossier);
-            $nb_file_delete = 0;
-            while ($file = readdir($dir)) {
-                if ('.' === $file && '..' === $file) {
-                    continue;
-                }
-
-                $ext = $this->getExtension($this->type);
-
-                // Effacer les fichiers caches
-                if (preg_match("#^cache_([a-f0-9]{32})\.".$ext.'$#i', $file) && @unlink($file)) {
-                    ++$nb_file_delete;
-                }
-            }
-            closedir($dir);
-
-            return $nb_file_delete;
+        if (!is_dir($folder)) {
+            throw new InvalidArgumentException("Folder {$folder} doesn't exists or is empty.");
         }
 
-        return false;
+        $dir = opendir($folder);
+        $nb_file_delete = 0;
+        while ($file = readdir($dir)) {
+            if ('.' === $file && '..' === $file) {
+                continue;
+            }
+
+            $ext = $this->getExtension($this->type);
+
+            // Clear cache files
+            if (preg_match("#^cache_([a-f0-9]{32})\.".$ext.'$#i', $file) && @unlink($file)) {
+                ++$nb_file_delete;
+            }
+        }
+        closedir($dir);
+
+        return $nb_file_delete;
     }
 
-    /**
-     * @param string $date
-     * @return int
-     */
-    protected function calculTime($date)
+    protected function calculTime(string $date): int
     {
         if (preg_match('#[ihjsmac]#i', $date)) {
             $date = str_replace(['i', 'h', 'j', 's', 'm', 'a', 'c'],
@@ -202,11 +172,7 @@ class Cache
         return $date;
     }
 
-    /**
-     * @param string $type
-     * @return string
-     */
-    protected function getExtension($type)
+    protected function getExtension(string $type): string
     {
         $ext = '.tmp';
         if (preg_match('#^dat#i', $type)) {

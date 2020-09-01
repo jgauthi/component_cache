@@ -19,7 +19,7 @@ if ($data->exists()) {
     $content = $data->content();
 
 } else {
-    $stripBody = function ($html) {
+    $stripBody = function (string $html): string {
         if (preg_match("/<body[^>]*>(.*?)<\/body>/is", $html, $row)) {
             return $row[1];
         }

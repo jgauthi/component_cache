@@ -13,7 +13,7 @@ Edit your [composer.json](https://getcomposer.org) (launch `composer update` aft
     { "type": "git", "url": "git@github.com:jgauthi/component_cache.git" }
   ],
   "require": {
-    "jgauthi/component_cache": "1.*"
+    "jgauthi/component_cache": "2.*"
   }
 }
 ```
