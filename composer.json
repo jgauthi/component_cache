@@ -7,7 +7,7 @@
     "php": ">=4.0"
   },
   "autoload": {
-    "classmap": [ "src/" ]
+    "psr-4": { "Jgauthi\\Component\\Cache\\": "src/" }
   },
   "license": "GPL-3.0",
   "authors": [
